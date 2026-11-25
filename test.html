@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Подбрасывание монетки</title>
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      max-width: 32rem;
+      margin: 2rem auto;
+      padding: 0 1rem;
+      text-align: center;
+    }
+    button {
+      font-size: 1.25rem;
+      padding: 0.6rem 2rem;
+      cursor: pointer;
+    }
+    button:disabled { cursor: wait; }
+    #result { font-size: 2.5rem; margin: 1.5rem 0; min-height: 3rem; }
+    #error { color: #b00020; min-height: 1.5rem; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { border-bottom: 1px solid #ccc; padding: 0.4rem; }
+  </style>
+</head>
+<body>
+  <h1>Подбрасывание монетки</h1>
+  <button id="flip" type="button">Подбросить</button>
+  <div id="result" aria-live="polite">—</div>
+  <div id="error" role="alert"></div>
+
+  <h2>Статистика</h2>
+  <p>
+    Орёл: <strong id="heads">0</strong> ·
+    Решка: <strong id="tails">0</strong> ·
+    Всего: <strong id="total">0</strong>
+  </p>
+  <p><small>Считается по броскам с момента открытия страницы.</small></p>
+
+  <h2>Последние 10 бросков</h2>
+  <table>
+    <thead>
+      <tr><th>№</th><th>Результат</th><th>Время</th></tr>
+    </thead>
+    <tbody id="history"></tbody>
+  </table>
+
+  <script>
+    const NAMES = { heads: "Орёл", tails: "Решка" };
+    const stats = { heads: 0, tails: 0 };
+    const button = document.getElementById("flip");
+
+    function setText(id, value) {
+      document.getElementById(id).textContent = value;
+    }
+
+    function addToHistory(flip) {
+      const body = document.getElementById("history");
+      const row = body.insertRow(0);
+      const time = new Date(flip.timestamp).toLocaleTimeString("ru-RU");
+      for (const value of [flip.flip_number, NAMES[flip.result], time]) {
+        row.insertCell().textContent = value;
+      }
+      while (body.rows.length > 10) {
+        body.deleteRow(-1);
+      }
+    }
+
+    async function flipCoin() {
+      button.disabled = true;
+      setText("error", "");
+      try {
+        const response = await fetch("/flip", {
+          cache: "no-store",
+          signal: AbortSignal.timeout(5000),
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error?.message ?? `HTTP ${response.status}`);
+        }
+        if (!(data.result in stats)) {
+          throw new Error("сервер вернул неожиданный ответ");
+        }
+        stats[data.result] += 1;
+        setText("result", NAMES[data.result]);
+        setText("heads", stats.heads);
+        setText("tails", stats.tails);
+        setText("total", stats.heads + stats.tails);
+        addToHistory(data);
+      } catch (error) {
+        setText("result", "—");
+        setText("error", `Не удалось подбросить монетку: ${error.message}`);
+      } finally {
+        button.disabled = false;
+      }
+    }
+
+    button.addEventListener("click", flipCoin);
+  </script>
+</body>
+</html>
