@@ -75,17 +75,37 @@
       }
     }
 
+    const OFFLINE = "Сервер недоступен. Попробуйте ещё раз позже.";
+
+    async function getJson(url) {
+      try {
+        const response = await fetch(url, {
+          cache: "no-store",
+          signal: AbortSignal.timeout(5000),
+        });
+        return { response, data: await response.json() };
+      } catch (error) {
+        // TypeError — сбой сети, TimeoutError — истёк тайм-аут.
+        if (error.name === "TypeError" || error.name === "TimeoutError") {
+          throw new Error(OFFLINE);
+        }
+        throw error;
+      }
+    }
+
+    function errorText(prefix, error) {
+      return error.message === OFFLINE ? OFFLINE : `${prefix}: ${error.message}`;
+    }
+
     // Номер запроса: опоздавший старый ответ не перезаписывает новый.
     let statsRequest = 0;
+    // Причина неудачи последнего броска: чтобы не повторять её под статистикой.
+    let flipError = "";
 
     async function loadTotals() {
       const current = ++statsRequest;
       try {
-        const response = await fetch("/stats", {
-          cache: "no-store",
-          signal: AbortSignal.timeout(5000),
-        });
-        const data = await response.json();
+        const { response, data } = await getJson("/stats");
         if (!response.ok) {
           throw new Error(data.error?.message ?? `HTTP ${response.status}`);
         }
@@ -99,19 +119,22 @@
         for (const name of ["heads", "tails", "total"]) {
           setText(`all-${name}`, "—");
         }
-        setText("stats-error", `Не удалось получить статистику: ${error.message}`);
+        setText(
+          "stats-error",
+          error.message === flipError
+            ? ""
+            : errorText("Не удалось получить статистику", error),
+        );
       }
     }
 
     async function flipCoin() {
       button.disabled = true;
+      flipError = "";
       setText("error", "");
+      setText("stats-error", "");
       try {
-        const response = await fetch("/flip", {
-          cache: "no-store",
-          signal: AbortSignal.timeout(5000),
-        });
-        const data = await response.json();
+        const { response, data } = await getJson("/flip");
         if (!response.ok) {
           throw new Error(data.error?.message ?? `HTTP ${response.status}`);
         }
@@ -126,7 +149,8 @@
         addToHistory(data);
       } catch (error) {
         setText("result", "—");
-        setText("error", `Не удалось подбросить монетку: ${error.message}`);
+        flipError = error.message;
+        setText("error", errorText("Не удалось подбросить монетку", error));
       } finally {
         button.disabled = false;
         loadTotals();
