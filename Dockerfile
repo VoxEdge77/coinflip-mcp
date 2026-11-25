@@ -13,11 +13,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Пользователь без прав root, под ним работает приложение.
 RUN useradd --system --uid 10001 --no-create-home appuser
 
-COPY app.py test.html ./
+COPY app.py db.py test.html ./
 
 USER appuser
 
 EXPOSE 5000
 
-# Один процесс: счётчик бросков хранится в его памяти.
+# Один процесс и 4 потока: один пул, до 4 соединений с базой.
 CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "1", "--threads", "4", "--no-control-socket", "--access-logfile", "-", "app:app"]

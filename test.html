@@ -19,7 +19,7 @@
     }
     button:disabled { cursor: wait; }
     #result { font-size: 2.5rem; margin: 1.5rem 0; min-height: 3rem; }
-    #error { color: #b00020; min-height: 1.5rem; }
+    #error, #stats-error { color: #b00020; min-height: 1.5rem; }
     table { width: 100%; border-collapse: collapse; }
     th, td { border-bottom: 1px solid #ccc; padding: 0.4rem; }
   </style>
@@ -37,6 +37,14 @@
     Всего: <strong id="total">0</strong>
   </p>
   <p><small>Считается по броскам с момента открытия страницы.</small></p>
+
+  <h2>Статистика за всё время</h2>
+  <p>
+    Орёл: <strong id="all-heads">—</strong> ·
+    Решка: <strong id="all-tails">—</strong> ·
+    Всего: <strong id="all-total">—</strong>
+  </p>
+  <p id="stats-error" role="status"></p>
 
   <h2>Последние 10 бросков</h2>
   <table>
@@ -67,6 +75,34 @@
       }
     }
 
+    // Номер запроса: опоздавший старый ответ не перезаписывает новый.
+    let statsRequest = 0;
+
+    async function loadTotals() {
+      const current = ++statsRequest;
+      try {
+        const response = await fetch("/stats", {
+          cache: "no-store",
+          signal: AbortSignal.timeout(5000),
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error?.message ?? `HTTP ${response.status}`);
+        }
+        if (current !== statsRequest) return;
+        for (const name of ["heads", "tails", "total"]) {
+          setText(`all-${name}`, data[name]);
+        }
+        setText("stats-error", "");
+      } catch (error) {
+        if (current !== statsRequest) return;
+        for (const name of ["heads", "tails", "total"]) {
+          setText(`all-${name}`, "—");
+        }
+        setText("stats-error", `Не удалось получить статистику: ${error.message}`);
+      }
+    }
+
     async function flipCoin() {
       button.disabled = true;
       setText("error", "");
@@ -93,10 +129,12 @@
         setText("error", `Не удалось подбросить монетку: ${error.message}`);
       } finally {
         button.disabled = false;
+        loadTotals();
       }
     }
 
     button.addEventListener("click", flipCoin);
+    loadTotals();
   </script>
 </body>
 </html>
