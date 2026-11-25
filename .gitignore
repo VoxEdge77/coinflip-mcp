@@ -1,0 +1,7 @@
+﻿# lesson-02-mcp
+.env
+venv/
+__pycache__/
+logs/
+*.log
+data/
